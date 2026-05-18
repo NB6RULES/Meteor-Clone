@@ -1,0 +1,58 @@
+workflows:
+  ios-unsigned:
+    name: iOS unsigned build (sideload via Sideloadly or AltStore)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      node: v22.13.0
+      xcode: latest
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/Library/Caches/CocoaPods
+        - $CM_BUILD_DIR/node_modules
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm ci
+      - name: Run Expo prebuild
+        script: |
+          npx expo prebuild --platform ios --clean --non-interactive
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+      - name: Build unsigned .app
+        script: |
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Using workspace=$WORKSPACE, scheme=$SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            build
+      - name: Package unsigned .ipa
+        script: |
+          cd ios
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found in build/Build/Products/Release-iphoneos"
+            ls -la build/Build/Products/ || true
+            exit 1
+          fi
+          echo "Found app at $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr ../meteor-unsigned.ipa Payload
+          ls -lh ../meteor-unsigned.ipa
+    artifacts:
+      - meteor-unsigned.ipa
