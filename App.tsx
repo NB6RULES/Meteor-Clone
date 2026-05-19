@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
+  Alert,
   KeyboardAvoidingView,
+  Linking,
   NativeSyntheticEvent,
   Platform,
   SafeAreaView,
@@ -121,12 +124,68 @@ export default function App() {
     }
   };
 
+  const deleteAll = useCallback(() => {
+    Alert.alert('Delete all tasks?', 'This clears the entire list.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete all',
+        style: 'destructive',
+        onPress: () => setTasks([]),
+      },
+    ]);
+  }, []);
+
+  const deleteCompleted = useCallback(() => {
+    setTasks((prev) => prev.filter((t) => !t.done));
+  }, []);
+
+  const openMenu = useCallback(() => {
+    const options = ['Delete completed', 'Delete all', 'Cancel'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 2,
+        },
+        (index) => {
+          if (index === 0) deleteCompleted();
+          else if (index === 1) deleteAll();
+        },
+      );
+    } else {
+      Alert.alert('Tasks', undefined, [
+        { text: 'Delete completed', onPress: deleteCompleted },
+        { text: 'Delete all', style: 'destructive', onPress: deleteAll },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }, [deleteAll, deleteCompleted]);
+
+  const openAbout = useCallback(() => {
+    const GITHUB = 'https://github.com/NB6RULES';
+    const FAB = 'https://fabacademy.org/2026/labs/kochi/students/nadec-biju/';
+    Alert.alert(
+      'ADHD-DO',
+      'Built by Nadec Biju.\n\nA single brain-dump list that mirrors itself onto your lock screen so you can check things off without unlocking.',
+      [
+        { text: 'GitHub', onPress: () => Linking.openURL(GITHUB) },
+        { text: 'Fab Academy', onPress: () => Linking.openURL(FAB) },
+        { text: 'Close', style: 'cancel' },
+      ],
+    );
+  }, []);
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iButton} accessibilityLabel="Info">
+        <TouchableOpacity
+          style={styles.iButton}
+          onPress={openAbout}
+          accessibilityLabel="About"
+        >
           <Text style={styles.iButtonText}>i</Text>
         </TouchableOpacity>
       </View>
@@ -150,9 +209,13 @@ export default function App() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.composerCard}>
-            <View style={styles.kebab}>
+            <TouchableOpacity
+              style={styles.kebab}
+              onPress={openMenu}
+              accessibilityLabel="List options"
+            >
               <Text style={styles.kebabDots}>•••</Text>
-            </View>
+            </TouchableOpacity>
             <Text style={styles.cardTitle}>
               Note it<Text style={styles.cardTitleColon}> :</Text>
             </Text>
@@ -198,14 +261,6 @@ export default function App() {
             )}
           </View>
 
-          <View style={styles.dotsRow}>
-            {[0, 1, 2].map((i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === 0 && styles.dotActive]}
-              />
-            ))}
-          </View>
         </ScrollView>
 
         <TouchableOpacity
@@ -338,19 +393,6 @@ const styles = StyleSheet.create({
     color: theme.textDim,
     textDecorationLine: 'line-through',
   },
-  dotsRow: {
-    marginTop: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  dotActive: { backgroundColor: 'rgba(255,255,255,0.7)' },
   fab: {
     position: 'absolute',
     bottom: 28,

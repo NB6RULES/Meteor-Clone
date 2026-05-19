@@ -59,7 +59,9 @@ struct LiveActivityWidget: Widget {
         context.attributes.backgroundColor.map { Color(hex: $0) }
       )
       .activitySystemActionForegroundColor(Color.white)
-      .applyWidgetURL(from: context.attributes.deepLinkUrl)
+      // NOTE: do NOT apply widgetURL to the main lock-screen view — it
+      // intercepts taps before Button(intent:) can run, blocking checkbox
+      // toggles. Users can still long-press the activity to open the app.
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading, priority: 1) {
