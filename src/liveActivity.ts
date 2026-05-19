@@ -5,25 +5,27 @@ import {
   type LiveActivityConfig,
   type LiveActivityState,
 } from 'expo-live-activity';
+import type { Task } from './types';
 
 const CONFIG: LiveActivityConfig = {
-  backgroundColor: '#000000',
+  backgroundColor: '#ff5a47',
   titleColor: '#ffffff',
-  subtitleColor: '#888888',
+  subtitleColor: '#ffffff',
   deepLinkUrl: 'meteorapp://open',
+  padding: 0,
 };
 
-function stateFor(text: string): LiveActivityState {
-  const trimmed = text.trim();
+function stateFor(tasks: Task[]): LiveActivityState {
+  const payload = tasks.map((t) => ({ text: t.text, done: t.done }));
   return {
-    title: (trimmed || '(empty note)').slice(0, 100),
-    subtitle: 'Tap to edit',
+    title: 'ADHD-DO',
+    subtitle: JSON.stringify(payload),
   };
 }
 
-export function startNoteActivity(text: string): string | null {
+export function startNoteActivity(tasks: Task[]): string | null {
   try {
-    const id = startActivity(stateFor(text), CONFIG);
+    const id = startActivity(stateFor(tasks), CONFIG);
     return typeof id === 'string' ? id : null;
   } catch (err) {
     console.warn('startActivity failed', err);
@@ -31,17 +33,17 @@ export function startNoteActivity(text: string): string | null {
   }
 }
 
-export function updateNoteActivity(id: string, text: string): void {
+export function updateNoteActivity(id: string, tasks: Task[]): void {
   try {
-    updateActivity(id, stateFor(text));
+    updateActivity(id, stateFor(tasks));
   } catch (err) {
     console.warn('updateActivity failed', err);
   }
 }
 
-export function endNoteActivity(id: string, text: string): void {
+export function endNoteActivity(id: string, tasks: Task[]): void {
   try {
-    stopActivity(id, stateFor(text));
+    stopActivity(id, stateFor(tasks));
   } catch (err) {
     console.warn('stopActivity failed', err);
   }

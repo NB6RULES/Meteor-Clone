@@ -25,11 +25,11 @@ import type { Note, Task } from './src/types';
 const MAX_NOTES = 5;
 
 type TabId = 'capture' | 'today' | 'focus' | 'settings';
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'capture', label: 'Capture' },
-  { id: 'today', label: 'Today' },
-  { id: 'focus', label: 'Focus' },
-  { id: 'settings', label: 'Settings' },
+const TABS: { id: TabId; label: string; icon: string }[] = [
+  { id: 'capture', label: 'Capture', icon: '☑' },
+  { id: 'today', label: 'Today', icon: '◴' },
+  { id: 'focus', label: 'Focus', icon: '◎' },
+  { id: 'settings', label: 'Settings', icon: '☰' },
 ];
 
 function parseTaskInput(text: string, existing: Task[] = []): Task[] {
@@ -50,10 +50,6 @@ function tasksToInput(tasks: Task[]): string {
   return tasks.map((t) => t.text).join('\n');
 }
 
-function tasksToActivityText(tasks: Task[]): string {
-  if (tasks.length === 0) return '(empty)';
-  return tasks.map((t) => `${t.done ? '✓' : '○'} ${t.text}`).join('\n');
-}
 
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -116,13 +112,12 @@ export default function App() {
       closeModal();
       return;
     }
-    const activityText = tasksToActivityText(tasks);
     if (editing) {
       let nextId: string | null = editing.liveActivityId;
       if (nextId) {
-        updateNoteActivity(nextId, activityText);
+        updateNoteActivity(nextId, tasks);
       } else {
-        nextId = startNoteActivity(activityText);
+        nextId = startNoteActivity(tasks);
         recordAvailability(nextId);
       }
       const updated: Note = {
@@ -133,7 +128,7 @@ export default function App() {
       };
       await persist(notes.map((n) => (n.id === editing.id ? updated : n)));
     } else {
-      const id = startNoteActivity(activityText);
+      const id = startNoteActivity(tasks);
       recordAvailability(id);
       const now = Date.now();
       const newNote: Note = {
@@ -160,10 +155,7 @@ export default function App() {
         style: 'destructive',
         onPress: async () => {
           if (note.liveActivityId) {
-            endNoteActivity(
-              note.liveActivityId,
-              tasksToActivityText(note.tasks),
-            );
+            endNoteActivity(note.liveActivityId, note.tasks);
           }
           await persist(notes.filter((n) => n.id !== note.id));
         },
@@ -256,11 +248,14 @@ export default function App() {
           return (
             <TouchableOpacity
               key={tab.id}
-              style={styles.tab}
+              style={[styles.tab, active && styles.tabActive]}
               onPress={() => setActiveTab(tab.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
             >
+              <Text style={[styles.tabIcon, active && styles.tabIconActive]}>
+                {tab.icon}
+              </Text>
               <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
                 {tab.label}
               </Text>
@@ -283,40 +278,65 @@ export default function App() {
             <TouchableOpacity onPress={closeModal}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                sendActive
-                  ? styles.sendButtonActive
-                  : styles.sendButtonInactive,
-              ]}
-              onPress={saveDraft}
-              disabled={!sendActive}
-              accessibilityLabel="Save note"
-            >
-              <Text
-                style={[
-                  styles.sendButtonIcon,
-                  sendActive && styles.sendButtonIconActive,
-                ]}
-              >
-                ↑
-              </Text>
-            </TouchableOpacity>
           </View>
           <View style={styles.modalBody}>
-            <Text style={styles.modalTitle}>Park it :</Text>
-            <TextInput
-              ref={inputRef}
-              style={styles.modalInput}
-              placeholder="One task per line..."
-              placeholderTextColor={theme.textFaint}
-              value={draft}
-              onChangeText={setDraft}
-              multiline
-              autoCorrect
-              autoCapitalize="sentences"
-            />
+            <View style={styles.composerCard}>
+              <View style={styles.kebab}>
+                <Text style={styles.kebabDots}>•••</Text>
+              </View>
+              <Text style={styles.modalTitle}>
+                Park it<Text style={styles.modalTitleColon}> :</Text>
+              </Text>
+              <TextInput
+                ref={inputRef}
+                style={styles.modalInput}
+                placeholder="Brain dump goes here…"
+                placeholderTextColor={theme.textFaint}
+                value={draft}
+                onChangeText={setDraft}
+                multiline
+                autoCorrect
+                autoCapitalize="sentences"
+              />
+            </View>
+            <View style={styles.composerActions}>
+              <View style={styles.composerActionsLeft}>
+                <View style={styles.iconChip}>
+                  <Text style={styles.iconChipGlyph}>📖</Text>
+                </View>
+                <View style={styles.iconChipPlain}>
+                  <Text style={styles.iconChipGlyph}>≡</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  sendActive
+                    ? styles.sendButtonActive
+                    : styles.sendButtonInactive,
+                ]}
+                onPress={saveDraft}
+                disabled={!sendActive}
+                accessibilityLabel="Save note"
+              >
+                <Text
+                  style={[
+                    styles.sendButtonIcon,
+                    sendActive && styles.sendButtonIconActive,
+                  ]}
+                >
+                  ↑
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dotsRow}>
+              {[0, 1, 2].map((i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, i === 0 && styles.dotActive]}
+                />
+              ))}
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -368,19 +388,19 @@ const styles = StyleSheet.create({
   emptyText: { color: theme.textDim, fontSize: 16 },
   emptyHint: { color: theme.textFaint, fontSize: 13, marginTop: 6 },
   card: {
-    backgroundColor: theme.surface,
+    backgroundColor: theme.surface2,
     padding: 18,
-    borderRadius: 16,
+    borderRadius: 22,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: theme.surface2,
+    borderColor: theme.border,
   },
   cardHeader: {
     color: theme.primary,
-    fontSize: 17,
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.6,
-    marginBottom: 10,
+    marginBottom: 14,
   },
   taskList: { gap: 6 },
   taskText: {
@@ -411,11 +431,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 8,
   },
   fabIcon: {
     color: theme.text,
@@ -426,31 +446,47 @@ const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
     bottom: TAB_BAR_MARGIN,
-    left: TAB_BAR_MARGIN,
-    right: TAB_BAR_MARGIN,
-    height: TAB_BAR_HEIGHT,
-    backgroundColor: theme.surface,
-    borderRadius: 32,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(28,28,30,0.92)',
+    borderRadius: 28,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     borderWidth: 1,
-    borderColor: theme.surface2,
+    borderColor: theme.border,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 6,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 2,
+  },
+  tabActive: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  tabIcon: {
+    color: 'rgba(235,235,245,0.55)',
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  tabIconActive: {
+    color: theme.primary,
   },
   tabLabel: {
-    color: theme.textDim,
-    fontSize: 13,
+    color: 'rgba(235,235,245,0.55)',
+    fontSize: 10,
     fontWeight: '600',
+    letterSpacing: 0.1,
   },
   tabLabelActive: {
     color: theme.primary,
@@ -459,34 +495,54 @@ const styles = StyleSheet.create({
   modal: { flex: 1, backgroundColor: theme.bg },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
   modalCancel: { color: theme.textDim, fontSize: 16, fontWeight: '500' },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  modalBody: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+  },
+  composerCard: {
+    backgroundColor: theme.surface2,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    minHeight: 220,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  kebab: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.surface3,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendButtonActive: { backgroundColor: theme.yellow },
-  sendButtonInactive: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  sendButtonIcon: { color: theme.textFaint, fontSize: 20, fontWeight: '700' },
-  sendButtonIconActive: { color: '#000' },
-  modalBody: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 8,
+  kebabDots: {
+    color: theme.textDim,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -1,
+    marginTop: -6,
   },
   modalTitle: {
     color: theme.primary,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.6,
-    marginBottom: 12,
+    marginBottom: 18,
+  },
+  modalTitleColon: {
+    color: theme.textFaint,
   },
   modalInput: {
     flex: 1,
@@ -495,5 +551,66 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlignVertical: 'top',
     lineHeight: 26,
+    minHeight: 120,
+  },
+  composerActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  composerActionsLeft: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.surface3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconChipPlain: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconChipGlyph: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 16,
+  },
+  sendButton: {
+    width: 70,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonActive: { backgroundColor: theme.yellow },
+  sendButtonInactive: { backgroundColor: 'rgba(255,255,255,0.06)' },
+  sendButtonIcon: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  sendButtonIconActive: { color: '#000' },
+  dotsRow: {
+    marginTop: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  dotActive: {
+    backgroundColor: 'rgba(255,255,255,0.7)',
   },
 });
