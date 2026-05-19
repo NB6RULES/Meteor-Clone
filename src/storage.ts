@@ -1,48 +1,42 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Note, Task } from './types';
+import type { Task } from './types';
 
-const KEY = 'meteor:notes:v1';
+const KEY = 'adhddo:note:v2';
+const LEGACY_KEY = 'meteor:notes:v1';
 
-type RawNote = {
-  id: string;
-  text?: string;
-  tasks?: Task[];
-  createdAt: number;
-  updatedAt: number;
+type Stored = {
+  tasks: Task[];
   liveActivityId: string | null;
+  updatedAt: number;
 };
 
-function migrate(raw: RawNote): Note {
-  if (Array.isArray(raw.tasks)) {
-    return {
-      id: raw.id,
-      tasks: raw.tasks,
-      createdAt: raw.createdAt,
-      updatedAt: raw.updatedAt,
-      liveActivityId: raw.liveActivityId,
-    };
-  }
-  return {
-    id: raw.id,
-    tasks: [{ text: raw.text ?? '', done: false }],
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
-    liveActivityId: raw.liveActivityId,
-  };
-}
+const EMPTY: Stored = { tasks: [], liveActivityId: null, updatedAt: 0 };
 
-export async function loadNotes(): Promise<Note[]> {
+export async function loadNote(): Promise<Stored> {
   const raw = await AsyncStorage.getItem(KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return (parsed as RawNote[]).map(migrate);
-  } catch {
-    return [];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Stored;
+      if (parsed && Array.isArray(parsed.tasks)) return parsed;
+    } catch {}
   }
+  // Migrate from legacy multi-note shape: flatten the first note's tasks.
+  const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+  if (legacy) {
+    try {
+      const arr = JSON.parse(legacy);
+      if (Array.isArray(arr) && arr.length > 0 && Array.isArray(arr[0]?.tasks)) {
+        return {
+          tasks: arr[0].tasks as Task[],
+          liveActivityId: arr[0].liveActivityId ?? null,
+          updatedAt: arr[0].updatedAt ?? Date.now(),
+        };
+      }
+    } catch {}
+  }
+  return EMPTY;
 }
 
-export async function saveNotes(notes: Note[]): Promise<void> {
-  await AsyncStorage.setItem(KEY, JSON.stringify(notes));
+export async function saveNote(note: Stored): Promise<void> {
+  await AsyncStorage.setItem(KEY, JSON.stringify(note));
 }
